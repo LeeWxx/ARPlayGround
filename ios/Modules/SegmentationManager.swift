@@ -6,7 +6,7 @@ import Accelerate
 @objc class SegmentationManager: NSObject {
     static let shared = SegmentationManager()
     private let maxImageDimension: CGFloat = 1024.0
-    private let modelInputSize = CGSize(width: 256, height: 256)  // 모델 입력 크기
+    private let modelInputSize = CGSize(width: 800, height: 800)  // 모델 입력 크기
 
     private override init() {
         super.init()
@@ -112,19 +112,22 @@ import Accelerate
             throw NSError(domain: "SegmentationError", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to get CGImage"])
         }
         
-        // Create MLMultiArray with shape [1, 3, 256, 256] for RGB channels
-        let shape: [NSNumber] = [1, 3, 256, 256]
+        let width = Int(modelInputSize.width)
+        let height = Int(modelInputSize.height)
+        
+        // Create MLMultiArray with shape [1, 3, height, width] for RGB channels
+        let shape: [NSNumber] = [1, 3, NSNumber(value: height), NSNumber(value: width)]
         let multiArray = try MLMultiArray(shape: shape, dataType: .float32)
         
         // Create color space and context
         let colorSpace = CGColorSpaceCreateDeviceRGB()
-        var rawData = [UInt8](repeating: 0, count: 256 * 256 * 4) // 4 for RGBA
+        var rawData = [UInt8](repeating: 0, count: width * height * 4) // 4 for RGBA
         let bytesPerPixel = 4
-        let bytesPerRow = bytesPerPixel * 256
+        let bytesPerRow = bytesPerPixel * width
         
         guard let context = CGContext(data: &rawData,
-                                    width: 256,
-                                    height: 256,
+                                    width: width,
+                                    height: height,
                                     bitsPerComponent: 8,
                                     bytesPerRow: bytesPerRow,
                                     space: colorSpace,
@@ -133,12 +136,12 @@ import Accelerate
         }
         
         // Draw image into context
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 256, height: 256))
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
         
         // Convert to float and normalize to [0, 1]
-        for y in 0..<256 {
-            for x in 0..<256 {
-                let offset = (y * 256 + x) * 4
+        for y in 0..<height {
+            for x in 0..<width {
+                let offset = (y * width + x) * 4
                 let r = Float(rawData[offset]) / 255.0
                 let g = Float(rawData[offset + 1]) / 255.0
                 let b = Float(rawData[offset + 2]) / 255.0
@@ -171,7 +174,7 @@ import Accelerate
             config.computeUnits = .cpuOnly  // GPU 대신 CPU로 실행
             let model = try MLModel(contentsOf: modelURL, configuration: config)
             
-            // Convert image to MLMultiArray (256x256)
+            // Convert image to MLMultiArray
             let inputArray = try convertImageToMultiArray(image)
             
             // Prepare model input
@@ -188,9 +191,12 @@ import Accelerate
             // Process in background
             DispatchQueue.global(qos: .userInitiated).async {
                 autoreleasepool {
+                    let width = Int(self.modelInputSize.width)
+                    let height = Int(self.modelInputSize.height)
+                    
                     guard let heatmapImage = self.createHeatmapFromMultiArray(segmentationMask, 
-                                                                            width: 256, 
-                                                                            height: 256) else {
+                                                                            width: width, 
+                                                                            height: height) else {
                         print("Failed to create heatmap image")
                         DispatchQueue.main.async {
                             completion(nil, NSError(domain: "SegmentationError", 
