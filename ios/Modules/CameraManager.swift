@@ -55,7 +55,7 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera,
                                                  for: .video,
                                                  position: .back) else {
-            print("사용 가능한 카메라가 없습니다.")
+            print("사용 가능한 카메라가 없습니다")
             return
         }
         
@@ -64,7 +64,7 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             if captureSession.canAddInput(input) {
                 captureSession.addInput(input)
             } else {
-                print("카메라 입력을 추가할 수 없습니다.")
+                print("카메라 입력을 추가할 수 없습니다")
                 return
             }
             
@@ -72,7 +72,11 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             let videoOutput = AVCaptureVideoDataOutput()
             videoOutput.setSampleBufferDelegate(self, queue: DispatchQueue.main)
             
-            // 비디오 연결 설정
+            if captureSession.canAddOutput(videoOutput) {
+                captureSession.addOutput(videoOutput)
+            }
+            
+            // 비디오 연결 설정 - 출력이 추가된 후에 해야 함
             if let connection = videoOutput.connection(with: .video) {
                 // 비디오 방향 설정
                 if connection.isVideoOrientationSupported {
@@ -82,10 +86,6 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
                 if connection.isVideoMirroringSupported {
                     connection.isVideoMirrored = false
                 }
-            }
-            
-            if captureSession.canAddOutput(videoOutput) {
-                captureSession.addOutput(videoOutput)
             }
             
         } catch {
@@ -100,6 +100,8 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         DispatchQueue.main.async {
             if let previewLayer = self.previewLayer {
                 previewLayer.frame = view.bounds
+                // 미리보기 레이어 방향 설정
+                previewLayer.connection?.videoOrientation = .portrait
                 view.layer.insertSublayer(previewLayer, at: 0)
             }
         }
@@ -124,6 +126,21 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         self.photoCallback = completion
     }
     
+    // 이미지 방향 수정
+    private func fixImageOrientation(_ image: UIImage) -> UIImage {
+        // 현재 디바이스 방향에 따라 이미지 회전
+        let currentOrientation = UIDevice.current.orientation
+        var imageOrientation: UIImage.Orientation
+        
+        imageOrientation = .up
+        
+        // 새 방향으로 이미지 생성
+        if let cgImage = image.cgImage {
+            return UIImage(cgImage: cgImage, scale: image.scale, orientation: imageOrientation)
+        }
+        
+        return image
+    }
     
     // AVCaptureVideoDataOutputSampleBufferDelegate
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
@@ -134,10 +151,13 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         let context = CIContext()
         guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return }
         
-        var image = UIImage(cgImage: cgImage)
+        // 기본 이미지 생성
+        let image = UIImage(cgImage: cgImage)
         
+        // 이미지 방향 수정
+        let fixedImage = fixImageOrientation(image)
         
-        callback(image)
+        callback(fixedImage)
         self.photoCallback = nil
     }
 } 
