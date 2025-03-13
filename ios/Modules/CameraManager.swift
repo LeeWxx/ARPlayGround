@@ -6,7 +6,13 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     
     private var captureSession: AVCaptureSession?
     private var previewLayer: AVCaptureVideoPreviewLayer?
-    private var photoCallback: ((UIImage?) -> Void)?
+    private var isProcessingFrame = false
+    private var realTimeProcessingEnabled = false
+    private var lastProcessedTime: TimeInterval = 0
+    private var processingInterval: TimeInterval = 0.5 // 0.5초마다 처리
+    
+    // 실시간 처리 콜백
+    var realTimeFrameCallback: ((UIImage) -> Void)?
     
     private override init() {
         super.init()
@@ -29,6 +35,11 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
                 }
             }
         }
+    }
+    
+    // 실시간 처리 활성화/비활성화
+    func setRealTimeProcessing(enabled: Bool) {
+        realTimeProcessingEnabled = enabled
     }
     
     // 카메라 권한 확인 및 요청
@@ -106,6 +117,9 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
             }
         }
         
+        // 실시간 처리 활성화
+        setRealTimeProcessing(enabled: true)
+        
         DispatchQueue.global(qos: .userInitiated).async {
             captureSession.startRunning()
         }
@@ -119,11 +133,6 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     // 카메라 세션 정지
     func stopCamera() {
         captureSession?.stopRunning()
-    }
-    
-    // 사진 캡처
-    func capturePhoto(completion: @escaping (UIImage?) -> Void) {
-        self.photoCallback = completion
     }
     
     // 이미지 방향 수정
@@ -144,20 +153,58 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
     
     // AVCaptureVideoDataOutputSampleBufferDelegate
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
-        guard let callback = photoCallback,
-              let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        // 실시간 처리가 활성화된 경우
+        if realTimeProcessingEnabled && !isProcessingFrame {
+            let currentTime = CACurrentMediaTime()
+            if currentTime - lastProcessedTime >= processingInterval {
+                processFrameForRealTime(sampleBuffer)
+            }
+        }
+    }
+    
+    // 프레임 처리
+    private func processFrame(_ sampleBuffer: CMSampleBuffer) -> UIImage? {
+        guard let imageBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            return nil
+        }
         
         let ciImage = CIImage(cvPixelBuffer: imageBuffer)
         let context = CIContext()
-        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else { return }
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
+            return nil
+        }
         
         // 기본 이미지 생성
         let image = UIImage(cgImage: cgImage)
         
         // 이미지 방향 수정
-        let fixedImage = fixImageOrientation(image)
+        return fixImageOrientation(image)
+    }
+    
+    // 프레임 처리 (실시간용)
+    private func processFrameForRealTime(_ sampleBuffer: CMSampleBuffer) {
+        isProcessingFrame = true
+        lastProcessedTime = CACurrentMediaTime()
         
-        callback(fixedImage)
-        self.photoCallback = nil
+        guard let image = processFrame(sampleBuffer), let callback = realTimeFrameCallback else {
+            isProcessingFrame = false
+            return
+        }
+        
+        // 세그멘테이션 처리
+        SegmentationManager.shared.processImage(image) { [weak self] resultImage, error in
+            self?.isProcessingFrame = false
+            
+            if let error = error {
+                print("실시간 세그멘테이션 오류: \(error)")
+                return
+            }
+            
+            if let resultImage = resultImage {
+                DispatchQueue.main.async {
+                    callback(resultImage)
+                }
+            }
+        }
     }
 } 

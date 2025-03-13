@@ -10,12 +10,14 @@ class CameraView: UIView {
         super.init(frame: frame)
         setupCameraView()
         setupOverlayView()
+        setupRealTimeProcessing()
     }
     
     required init?(coder: NSCoder) {
         super.init(coder: coder)
         setupCameraView()
         setupOverlayView()
+        setupRealTimeProcessing()
     }
     
     /// 카메라 미리보기 설정
@@ -33,14 +35,24 @@ class CameraView: UIView {
         }
     }
     
-    /// 세그멘테이션 결과 이미지 표시
-    func showSegmentationResult(_ image: UIImage) {
+    /// 실시간 처리 설정
+    private func setupRealTimeProcessing() {
+        CameraManager.shared.realTimeFrameCallback = { [weak self] resultImage in
+            self?.updateOverlay(with: resultImage)
+        }
+        CameraManager.shared.setRealTimeProcessing(enabled: true)
+    }
+    
+    /// 오버레이 이미지 업데이트
+    private func updateOverlay(with image: UIImage) {
         DispatchQueue.main.async { [weak self] in
             self?.overlayImageView?.image = image
             
-            // 페이드 인 애니메이션
-            UIView.animate(withDuration: 0.3) {
-                self?.overlayImageView?.alpha = 0.6
+            // 페이드 인 애니메이션 (이미 표시되어 있지 않은 경우)
+            if self?.overlayImageView?.alpha != 0.6 {
+                UIView.animate(withDuration: 0.3) {
+                    self?.overlayImageView?.alpha = 0.6
+                }
             }
         }
     }
@@ -67,5 +79,6 @@ class CameraView: UIView {
     
     deinit {
         CameraManager.shared.stopCamera()
+        CameraManager.shared.setRealTimeProcessing(enabled: false)
     }
 } 
