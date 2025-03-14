@@ -12,13 +12,11 @@
 
         private override init() {
             super.init()
-            print("SegmentationManager 초기화됨")
             preloadModel()
         }
         
         // 모델 미리 로드
         private func preloadModel() {
-            print("프리로드")
             DispatchQueue.global(qos: .background).async {
                 do {
                     guard let modelURL = Bundle.main.url(forResource: "model_final_coco", withExtension: "mlmodelc") else {
@@ -30,34 +28,29 @@
                     config.computeUnits = .cpuOnly
                     self.model = try MLModel(contentsOf: modelURL, configuration: config)
                     self.modelLoaded = true
-                    print("모델 미리 로드 성공")
                 } catch {
-                    print("모델 미리 로드 실패: \(error)")
+                    print("모델 로드 실패: \(error)")
                 }
             }
         }
 
         // 이미지 리사이즈 함수 (모델 입력용)
         private func resizeImageForModel(_ image: UIImage) -> UIImage {
-            print("모델용 이미지 리사이즈 시작, 원본 크기: \(image.size), 목표 크기: \(modelInputSize)")
             UIGraphicsBeginImageContextWithOptions(modelInputSize, false, 0.0)
             image.draw(in: CGRect(origin: .zero, size: modelInputSize))
             let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
             UIGraphicsEndImageContext()
-            print("모델용 이미지 리사이즈 완료")
             return resizedImage ?? image
         }
 
         // 이미지 리사이즈 함수 (디스플레이용)
         private func resizeImageForDisplay(_ image: UIImage) -> UIImage {
-            print("디스플레이용 이미지 리사이즈 시작, 원본 크기: \(image.size)")
             let size = image.size
             let widthRatio = maxImageDimension / size.width
             let heightRatio = maxImageDimension / size.height
             let scale = min(widthRatio, heightRatio)
 
             if scale >= 1.0 {
-                print("리사이즈 불필요, 원본 반환")
                 return image
             }
             let newSize = CGSize(width: size.width * scale, height: size.height * scale)
@@ -65,13 +58,11 @@
             image.draw(in: CGRect(origin: .zero, size: newSize))
             let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
             UIGraphicsEndImageContext()
-            print("디스플레이용 이미지 리사이즈 완료, 새 크기: \(newSize)")
             return resizedImage ?? image
         }
 
         // MLMultiArray로부터 바이너리 마스크 이미지를 생성하는 함수
         private func createHeatmapFromMultiArray(_ multiArray: MLMultiArray, width: Int, height: Int) -> UIImage? {
-            print("히트맵 생성 시작, 크기: \(width)x\(height)")
             let colorSpace = CGColorSpaceCreateDeviceRGB()
             let bytesPerPixel = 4
             let bytesPerRow = width * bytesPerPixel
@@ -124,25 +115,20 @@
                                         space: colorSpace,
                                         bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
             else {
-                print("CGContext 생성 실패")
                 return nil
             }
             guard let cgImage = context.makeImage() else {
-                print("CGImage 생성 실패")
                 return nil
             }
-            print("히트맵 생성 완료")
             return UIImage(cgImage: cgImage)
         }
 
         // UIImage를 MLMultiArray로 변환
         private func convertImageToMultiArray(_ image: UIImage) throws -> MLMultiArray {
-            print("이미지를 MLMultiArray로 변환 시작")
             // 이미지를 모델 입력 크기로 리사이즈
             let resizedImage = resizeImageForModel(image)
             
             guard let cgImage = resizedImage.cgImage else {
-                print("CGImage 변환 실패")
                 throw NSError(domain: "SegmentationError", code: -1, userInfo: [NSLocalizedDescriptionKey: "CGImage 변환 실패"])
             }
             
@@ -166,7 +152,6 @@
                                         bytesPerRow: bytesPerRow,
                                         space: colorSpace,
                                         bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
-                print("컨텍스트 생성 실패")
                 throw NSError(domain: "SegmentationError", code: -2, userInfo: [NSLocalizedDescriptionKey: "컨텍스트 생성 실패"])
             }
             
@@ -188,20 +173,16 @@
                 }
             }
             
-            print("이미지를 MLMultiArray로 변환 완료")
             return multiArray
         }
 
         // 이미지 처리 함수: UIImage를 받아 모델 실행 후 히트맵 생성 및 원본 이미지에 오버레이
         @objc func processImage(_ image: UIImage, completion: @escaping (UIImage?, Error?) -> Void) {
-            print("이미지 처리 시작, 크기: \(image.size)")
             // 이미지 리사이즈 (디스플레이용)
             let displayImage = resizeImageForDisplay(image)
-            print("이미지 처리 중, 크기: \(displayImage.size)")
 
             // 모델 로드
             guard let modelURL = Bundle.main.url(forResource: "model_final_coco", withExtension: "mlmodelc") else {
-                print("모델 파일을 찾을 수 없습니다")
                 completion(nil, NSError(domain: "SegmentationError", code: -1, userInfo: [NSLocalizedDescriptionKey: "모델 파일을 찾을 수 없습니다"]))
                 return
             }
@@ -213,10 +194,8 @@
                 // 미리 로드된 모델이 있으면 사용
                 let modelToUse: MLModel
                 if modelLoaded, let loadedModel = model {
-                    print("미리 로드된 모델 사용")
                     modelToUse = loadedModel
                 } else {
-                    print("모델 새로 로드")
                     modelToUse = try MLModel(contentsOf: modelURL, configuration: config)
                 }
                 
@@ -226,17 +205,13 @@
                 // 모델 입력 준비
                 let input = try MLDictionaryFeatureProvider(dictionary: ["input_image": inputArray])
                 
-                print("모델 추론 시작")
                 // 추론 실행
                 let output = try modelToUse.prediction(from: input)
                 
                 // 출력 multiarray 가져오기
                 guard let segmentationMask = output.featureValue(for: "segmentation_mask")?.multiArrayValue else {
-                    print("세그멘테이션 마스크 생성 실패")
                     throw NSError(domain: "SegmentationError", code: -3, userInfo: [NSLocalizedDescriptionKey: "세그멘테이션 마스크 생성 실패"])
                 }
-                
-                print("모델 추론 완료, 결과 처리 시작")
 
                 // 백그라운드에서 처리
                 DispatchQueue.global(qos: .userInitiated).async {
@@ -247,7 +222,7 @@
                         guard let heatmapImage = self.createHeatmapFromMultiArray(segmentationMask,
                                                                                 width: width,
                                                                                 height: height) else {
-                            print("히트맵 이미지 생성 실패")
+
                             DispatchQueue.main.async {
                                 completion(nil, NSError(domain: "SegmentationError",
                                                     code: -4,
@@ -255,8 +230,7 @@
                             }
                             return
                         }
-
-                        print("히트맵 이미지 생성 성공, 오버레이 시작")
+     
                         // 히트맵 이미지를 디스플레이 이미지 크기로 리사이즈
                         UIGraphicsBeginImageContextWithOptions(displayImage.size, false, 0.0)
                         displayImage.draw(in: CGRect(origin: .zero, size: displayImage.size))
@@ -265,8 +239,6 @@
                                         alpha: 0.6)
                         let resultImage = UIGraphicsGetImageFromCurrentImageContext()
                         UIGraphicsEndImageContext()
-                        
-                        print("결과 이미지 생성 완료, 크기: \(resultImage?.size ?? CGSize.zero)")
 
                         DispatchQueue.main.async {
                             completion(resultImage, nil)
@@ -274,7 +246,6 @@
                     }
                 }
             } catch {
-                print("모델 로딩/실행 오류: \(error)")
                 completion(nil, error)
             }
         }
