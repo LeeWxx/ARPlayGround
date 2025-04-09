@@ -25,6 +25,9 @@ class CameraViewManager: RCTViewManager {
                     return
                 }
                 
+                // 카메라 세션 중지
+                CameraManager.shared.stopCamera()
+                
                 // 세그멘테이션 처리
                 SegmentationManager.shared.processImage(image) { resultImage, error in
                     if let error = error {
@@ -49,6 +52,9 @@ class CameraViewManager: RCTViewManager {
         DispatchQueue.main.async {
             guard let view = self.bridge.uiManager.view(forReactTag: node) as? CameraView else { return }
             view.clearOverlay()
+            
+            // 카메라 세션 재시작
+            CameraManager.shared.startCamera()
         }
     }
 } 

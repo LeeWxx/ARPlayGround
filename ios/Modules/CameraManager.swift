@@ -121,6 +121,15 @@ class CameraManager: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
         captureSession?.stopRunning()
     }
     
+    // 카메라 세션 시작
+    func startCamera() {
+        if captureSession?.isRunning == false {
+            DispatchQueue.global(qos: .userInitiated).async {
+                self.captureSession?.startRunning()
+            }
+        }
+    }
+    
     // 사진 캡처
     func capturePhoto(completion: @escaping (UIImage?) -> Void) {
         self.photoCallback = completion

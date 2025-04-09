@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   StyleSheet,
   requireNativeComponent,
@@ -19,22 +19,33 @@ const { CameraViewManager } = NativeModules;
 
 const CameraScreen = () => {
   const cameraRef = useRef(null);
+  const [processing, setProcessing] = useState(false);
+  const [showingResult, setShowingResult] = useState(false);
 
   const handleCapture = async () => {
+    if (processing || showingResult) return;
+    
     try {
+      setProcessing(true);
       const nodeId = findNodeHandle(cameraRef.current);
       if (nodeId) {
         await CameraViewManager.capturePhoto(nodeId);
+        setShowingResult(true);
       }
     } catch (error) {
       console.error('Error during capture and process:', error);
+    } finally {
+      setProcessing(false);
     }
   };
 
   const handleClearOverlay = () => {
+    if (!showingResult) return;
+    
     const nodeId = findNodeHandle(cameraRef.current);
     if (nodeId) {
       CameraViewManager.clearOverlay(nodeId);
+      setShowingResult(false);
     }
   };
 
@@ -42,10 +53,16 @@ const CameraScreen = () => {
     <View style={styles.container}>
       <CameraView ref={cameraRef} style={styles.cameraView} />
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.button} onPress={handleCapture}>
-          <Text style={styles.buttonText}>캡처</Text>
+        <TouchableOpacity 
+          style={[styles.button, (processing || showingResult) && styles.disabledButton]} 
+          onPress={handleCapture}
+          disabled={processing || showingResult}>
+          <Text style={styles.buttonText}>{processing ? '처리 중...' : '캡처'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.button} onPress={handleClearOverlay}>
+        <TouchableOpacity 
+          style={[styles.button, !showingResult && styles.disabledButton]} 
+          onPress={handleClearOverlay}
+          disabled={!showingResult}>
           <Text style={styles.buttonText}>초기화</Text>
         </TouchableOpacity>
       </View>
@@ -78,6 +95,10 @@ const styles = StyleSheet.create({
     height: 80,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  disabledButton: {
+    backgroundColor: 'gray',
+    opacity: 0.7,
   },
   buttonText: {
     fontSize: 16,
