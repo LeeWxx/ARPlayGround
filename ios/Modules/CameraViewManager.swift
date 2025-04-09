@@ -4,6 +4,14 @@ import React
 @objc(CameraViewManager)
 class CameraViewManager: RCTViewManager {
     
+    private var cameraService: CameraCapturable {
+        return CameraService.shared
+    }
+    
+    private var imageSegmenter: ImageSegmenting {
+        return ImageSegmenter.shared
+    }
+    
     override func view() -> UIView! {
         return CameraView()
     }
@@ -19,17 +27,18 @@ class CameraViewManager: RCTViewManager {
                 return
             }
             
-            CameraManager.shared.capturePhoto { image in
+            // 이미지 캡처 요청 (카메라가 실행 중인 상태에서)
+            self.cameraService.capturePhoto { image in
+                // 이미지 캡처 완료 후 카메라 세션 중지
+                view.stopCameraSession()
+                
                 guard let image = image else {
                     rejecter("ERROR", "Failed to capture image", nil)
                     return
                 }
                 
-                // 카메라 세션 중지
-                CameraManager.shared.stopCamera()
-                
                 // 세그멘테이션 처리
-                SegmentationManager.shared.processImage(image) { resultImage, error in
+                self.imageSegmenter.processImage(image) { resultImage, error in
                     if let error = error {
                         rejecter("ERROR", error.localizedDescription, error)
                         return
@@ -54,7 +63,7 @@ class CameraViewManager: RCTViewManager {
             view.clearOverlay()
             
             // 카메라 세션 재시작
-            CameraManager.shared.startCamera()
+            view.startCameraSession()
         }
     }
 } 

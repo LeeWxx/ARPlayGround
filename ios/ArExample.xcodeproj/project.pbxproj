@@ -49,6 +49,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		E1A282A62DA6A0F00030E3DD /* Protocols */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Protocols;
+			sourceTree = "<group>";
+		};
 		E1DC5C9D2D81CA6400A28FBD /* Models */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = Models;
@@ -101,6 +106,7 @@
 		13B07FAE1A68108700A75B9A /* ArExample */ = {
 			isa = PBXGroup;
 			children = (
+				E1A282A62DA6A0F00030E3DD /* Protocols */,
 				E1DC5C9E2D81CA6A00A28FBD /* Modules */,
 				E1DC5C9D2D81CA6400A28FBD /* Models */,
 				13B07FAF1A68108700A75B9A /* AppDelegate.h */,
@@ -207,6 +213,7 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
+				E1A282A62DA6A0F00030E3DD /* Protocols */,
 				E1DC5C9D2D81CA6400A28FBD /* Models */,
 				E1DC5C9E2D81CA6A00A28FBD /* Modules */,
 			);
