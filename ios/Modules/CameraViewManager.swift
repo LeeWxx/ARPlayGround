@@ -12,6 +12,10 @@ class CameraViewManager: RCTViewManager {
         return ImageSegmenter.shared
     }
     
+    private var nailProcessor: NailProcessing {
+        return NailProcessor.shared
+    }
+    
     override func view() -> UIView! {
         return CameraView()
     }
@@ -27,31 +31,59 @@ class CameraViewManager: RCTViewManager {
                 return
             }
             
+            // Promise 상태 추적용 플래그
+            var isPromiseHandled = false
+            
+            // 안전하게 Promise를 처리하는 함수들
+            let safeResolve: (Any) -> Void = { result in
+                DispatchQueue.main.async {
+                    if !isPromiseHandled {
+                        isPromiseHandled = true
+                        resolver(result)
+                    }
+                }
+            }
+            
+            let safeReject: (String, String, Error?) -> Void = { code, message, error in
+                DispatchQueue.main.async {
+                    if !isPromiseHandled {
+                        isPromiseHandled = true
+                        rejecter(code, message, error)
+                    }
+                }
+            }
+            
             // 이미지 캡처 요청 (카메라가 실행 중인 상태에서)
-            self.cameraService.capturePhoto { image in
-                // 이미지 캡처 완료 후 카메라 세션 중지
-                view.stopCameraSession()
+            self.cameraService.capturePhoto { [weak self] image in
+                guard let self = self else { return }
                 
+                // 이미지가 없는 경우 오류 반환
                 guard let image = image else {
-                    rejecter("ERROR", "Failed to capture image", nil)
+                    view.startCameraSession() // 카메라 세션 재시작
+                    safeReject("ERROR", "Failed to capture image", nil)
                     return
                 }
                 
-                // 세그멘테이션 처리
-                self.imageSegmenter.processImage(image) { resultImage, error in
+                // 이미지 캡처 완료 후 카메라 세션 중지
+                view.stopCameraSession()
+                
+                // 네일 프로세서를 사용하여 이미지 처리
+                self.nailProcessor.processNailOverlay(for: image) { resultImage, error in
                     if let error = error {
-                        rejecter("ERROR", error.localizedDescription, error)
+                        view.startCameraSession() // 오류 발생 시 카메라 세션 재시작
+                        safeReject("ERROR", error.localizedDescription, error)
                         return
                     }
                     
                     guard let resultImage = resultImage else {
-                        rejecter("ERROR", "Failed to process image", nil)
+                        view.startCameraSession() // 결과 이미지가 없는 경우 카메라 세션 재시작
+                        safeReject("ERROR", "Failed to process image", nil)
                         return
                     }
                     
                     // 결과 이미지를 오버레이로 표시
                     view.showSegmentationResult(resultImage)
-                    resolver(true)
+                    safeResolve(true) // Promise 안전하게 해결
                 }
             }
         }
