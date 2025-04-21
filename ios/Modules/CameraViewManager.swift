@@ -83,6 +83,13 @@ class CameraViewManager: RCTViewManager {
                     
                     // 결과 이미지를 오버레이로 표시
                     view.showSegmentationResult(resultImage)
+                    
+                    // 이벤트 발생
+                    if let onCaptureComplete = view.onCaptureComplete {
+                        let eventBody: [String: Any] = ["success": true]
+                        onCaptureComplete(eventBody)
+                    }
+                    
                     safeResolve(true) // Promise 안전하게 해결
                 }
             }

@@ -6,6 +6,10 @@ import React
 class CameraView: UIView {
     private var overlayImageView: UIImageView?
     
+    // 이벤트 콜백
+    @objc var onCaptureComplete: RCTDirectEventBlock?
+    @objc var onError: RCTDirectEventBlock?
+    
     // 카메라 서비스 (명시적으로 의존성 주입)
     private var cameraService: CameraCapturable
     
@@ -70,6 +74,17 @@ class CameraView: UIView {
     /// 카메라 세션 중지
     func stopCameraSession() {
         cameraService.stopCamera()
+    }
+    
+    /// 사진 캡처
+    func capturePhoto(completion: @escaping (UIImage?) -> Void) {
+        cameraService.capturePhoto { [weak self] image in
+            if image == nil, let self = self, let onError = self.onError {
+                // 에러 이벤트 발생
+                onError(["error": "Failed to capture image"])
+            }
+            completion(image)
+        }
     }
     
     override func layoutSubviews() {
