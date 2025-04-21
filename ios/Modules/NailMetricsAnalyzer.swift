@@ -9,7 +9,7 @@ class NailMetricsAnalyzer: NailMetricsAnalyzing {
         ("index", .indexDIP, .indexTip),
         ("middle", .middleDIP, .middleTip),
         ("ring", .ringDIP, .ringTip),
-        ("little", .littleDIP, .littleTip)
+        ("pinky", .littleDIP, .littleTip)
     ]
     
     func calculateAllFingerMetrics(
