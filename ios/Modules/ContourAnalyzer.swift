@@ -1,38 +1,70 @@
 import UIKit
 import Vision
 
-class ContourAnalyzer: ContourAnalyzing {
+/// 세그멘테이션된 이미지에서 컨투어(윤곽) 추출 및 분석을 수행하는 클래스
+class ContourAnalyzer: NSObject, ContourAnalyzing {
+    private var lastContoursObservation: VNContoursObservation?
+    
+    /// 세그멘테이션 이미지에서 컨투어를 추출하고 필터링합니다.
+    /// - Parameter segmentedImage: 세그멘테이션이 적용된 이미지
+    /// - Returns: 유효한 컨투어 경로와 중심점 배열
+    func extractContours(from segmentedImage: UIImage) -> [(path: UIBezierPath, center: CGPoint)] {
+        // 원본 이미지를 그레이스케일로 변환
+        guard let ciImage = CIImage(image: segmentedImage) else {
+            print("CIImage 변환 실패")
+            return []
+        }
+        
+        // 그레이스케일 필터 적용
+        let grayscaleFilter = CIFilter(name: "CIPhotoEffectMono")
+        grayscaleFilter?.setValue(ciImage, forKey: kCIInputImageKey)
+        
+        guard let outputImage = grayscaleFilter?.outputImage else {
+            print("그레이스케일 변환 실패")
+            return []
+        }
+        
+        // 이미지 컨투어 감지 요청
+        let request = VNDetectContoursRequest()
+        request.revision = VNDetectContourRequestRevision1
+        request.contrastAdjustment = 1.0
+        request.maximumImageDimension = 512
+        
+        // 요청 수행
+        let handler = VNImageRequestHandler(ciImage: outputImage, options: [:])
+        do {
+            try handler.perform([request])
+            
+            guard let contoursObservation = request.results?.first as? VNContoursObservation else {
+                print("컨투어 감지 실패")
+                return []
+            }
+            
+            // 이전 컨투어 결과 저장
+            self.lastContoursObservation = contoursObservation
+            
+            // 컨투어 경로 추출
+            let contourPaths = extractContourPaths(
+                from: contoursObservation,
+                imageSize: segmentedImage.size
+            )
+            
+            // 유효한 컨투어만 필터링
+            let validContours = filterValidContours(
+                contourPaths,
+                imageSize: segmentedImage.size
+            )
+            
+            print("유효한 컨투어 개수: \(validContours.count)")
+            return validContours
+            
+        } catch {
+            print("컨투어 감지 에러: \(error)")
+            return []
+        }
+    }
     
     // MARK: - 1단계: 컨투어 추출 및 필터링
-    
-    func extractContours(from segmentationMask: UIImage) -> [(path: UIBezierPath, center: CGPoint)] {
-        guard let cgMask = segmentationMask.cgImage else {
-            print("Segmentation mask에서 CGImage 추출 실패")
-            return []
-        }
-        
-        let contoursRequest = VNDetectContoursRequest()
-        contoursRequest.contrastAdjustment = 2.0
-        contoursRequest.detectsDarkOnLight = true
-        contoursRequest.maximumImageDimension = Int(segmentationMask.size.width)
-        
-        let handler = VNImageRequestHandler(cgImage: cgMask, options: [:])
-        do {
-            try handler.perform([contoursRequest])
-        } catch {
-            print("컨투어 감지 요청 오류: \(error)")
-            return []
-        }
-        
-        guard let contoursObservation = contoursRequest.results?.first as? VNContoursObservation else {
-            print("컨투어 결과 없음")
-            return []
-        }
-        
-        let contourPaths = extractContourPaths(from: contoursObservation, imageSize: segmentationMask.size)
-        let validContours = filterValidContours(contourPaths, imageSize: segmentationMask.size)
-        return validContours
-    }
     
     private func extractContourPaths(
         from contoursObservation: VNContoursObservation,
@@ -93,104 +125,5 @@ class ContourAnalyzer: ContourAnalyzing {
             }
         }
         return validContours
-    }
-    
-    // MARK: - 2단계: 손가락 매핑 및 시각화 처리
-    
-    func mapFingerTipsToContours(
-        in context: CGContext,
-        observation: VNHumanHandPoseObservation,
-        contours: [(path: UIBezierPath, center: CGPoint)],
-        colors: [UIColor],
-        displaySize: CGSize
-    ) {
-        let fingerTipNames: [VNHumanHandPoseObservation.JointName] = [
-            .thumbTip, .indexTip, .middleTip, .ringTip, .littleTip
-        ]
-        
-        guard let recognizedPoints = try? observation.recognizedPoints(.all) else { return }
-        
-        for (index, joint) in fingerTipNames.enumerated() {
-            guard let fingerPointValue = recognizedPoints[joint],
-                  fingerPointValue.confidence > 0.2 else { continue }
-            
-            let fingerPoint = CGPoint(
-                x: fingerPointValue.location.x * displaySize.width,
-                y: (1 - fingerPointValue.location.y) * displaySize.height
-            )
-            
-            // 손가락 TIP을 표시 (노란색 원)
-            let detectionCircle = UIBezierPath(
-                arcCenter: fingerPoint,
-                radius: 5.0,
-                startAngle: 0,
-                endAngle: CGFloat.pi * 2,
-                clockwise: true
-            )
-            context.setFillColor(UIColor.yellow.cgColor)
-            context.addPath(detectionCircle.cgPath)
-            context.fillPath()
-            
-            // 가장 가까운 컨투어 찾기
-            var closestContour: UIBezierPath?
-            var closestCenter: CGPoint?
-            var minDistance: CGFloat = CGFloat.greatestFiniteMagnitude
-            
-            for (contour, center) in contours {
-                let distance = hypot(center.x - fingerPoint.x, center.y - fingerPoint.y)
-                if distance < minDistance {
-                    minDistance = distance
-                    closestContour = contour
-                    closestCenter = center
-                }
-            }
-            
-            // 해당 손가락의 컨투어가 있다면 색상 적용
-            if let contourToDraw = closestContour {
-                let color = colors[index % colors.count]
-                context.setStrokeColor(color.cgColor)
-                context.addPath(contourToDraw.cgPath)
-                context.strokePath()
-                
-                context.setFillColor(color.withAlphaComponent(0.5).cgColor)
-                context.addPath(contourToDraw.cgPath)
-                context.fillPath()
-                
-                if let center = closestCenter {
-                    print("손가락 \(joint)와 가장 가까운 컨투어 - 거리: \(minDistance), 중심: \(center)")
-                }
-            }
-        }
-    }
-    
-    func visualizeFingerDirections(
-        in context: CGContext,
-        observation: VNHumanHandPoseObservation,
-        contours: [(path: UIBezierPath, center: CGPoint)],
-        displaySize: CGSize
-    ) {
-        // 상위 단계에서 NailMetricsAnalyzer를 사용하여 손톱 메트릭스를 계산 후 시각화합니다.
-        let fingerMetrics = NailMetricsAnalyzer().calculateAllFingerMetrics(
-            observation: observation,
-            contours: contours,
-            displaySize: displaySize
-        )
-        
-        for metrics in fingerMetrics {
-            // 컨투어 중심 또는 영역이 해당 손가락 메트릭스에 맞으면 시각화 수행
-            for (contour, _) in contours {
-                if contour.bounds.contains(metrics.contourCenter) {
-                    let analyzer = NailMetricsAnalyzer()
-                    analyzer.visualizeNailMetrics(
-                        in: context,
-                        metrics: metrics,
-                        contour: contour,
-                        arrowLength: 60.0,
-                        arrowColor: .white
-                    )
-                    break
-                }
-            }
-        }
     }
 }

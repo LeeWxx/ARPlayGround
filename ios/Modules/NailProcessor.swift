@@ -137,60 +137,14 @@ class NailProcessor: NSObject, NailProcessing {
             // 원본 이미지 그리기
             baseImage.draw(in: CGRect(origin: .zero, size: baseImage.size))
             
-            // 각 손 포즈 관측 결과에 대해 컨투어 매핑 및 시각화 처리
+            // 각 손 포즈 관측 결과에 대해 처리
             for observation in handObservations {
-                // 손가락 매핑 및 색상 적용
-                if let mappingContours = contourAnalyzer as? ContourAnalyzer {
-                    mappingContours.mapFingerTipsToContours(
-                        in: context.cgContext,
-                        observation: observation,
-                        contours: contours,
-                        colors: [.red, .green, .blue, .orange, .purple],
-                        displaySize: baseImage.size
-                    )
-                    
-                    // 손가락 방향 시각화 (화살표, 십자선, 각도 텍스트)
-                    mappingContours.visualizeFingerDirections(
-                        in: context.cgContext,
-                        observation: observation,
-                        contours: contours,
-                        displaySize: baseImage.size
-                    )
-                }
-                
                 // 메트릭스 계산
                 let metrics = nailMetricsAnalyzer.calculateAllFingerMetrics(
                     observation: observation,
                     contours: contours,
                     displaySize: baseImage.size
                 )
-                
-                // 메트릭스 값 출력
-                print("\n===== 손톱 메트릭스 계산 결과 =====")
-                for m in metrics {
-                    print("""
-                    \(m.fingerName) 손가락:
-                    - 중심점: (\(m.contourCenter.x), \(m.contourCenter.y))
-                    - 각도: \(m.angle)도
-                    - 크기: \(m.width) x \(m.height)
-                    - DIP: (\(m.dipPoint.x), \(m.dipPoint.y))
-                    - TIP: (\(m.tipPoint.x), \(m.tipPoint.y))
-                    """)
-                }
-                print("===================================\n")
-                
-                // 시각화 코드 (디버깅용)
-                if let visualizer = nailMetricsAnalyzer as? NailMetricsAnalyzer {
-                    for m in metrics {
-                        visualizer.visualizeNailMetrics(
-                            in: context.cgContext,
-                            metrics: m,
-                            contour: contours.first { $0.center == m.contourCenter }?.path ?? UIBezierPath(),
-                            arrowLength: 60.0,
-                            arrowColor: .white
-                        )
-                    }
-                }
                 
                 // 각 손가락에 대해 네일 이미지 적용
                 let group = DispatchGroup()
@@ -276,8 +230,6 @@ class NailProcessor: NSObject, NailProcessing {
                         )
                         
                         processedImage?.draw(in: drawRect)
-                        
-                        print("네일 이미지 적용 - 손가락: \(fingerType), 크기: \(scaledSize), 각도: \(m.angle)°")
                     }
                 }
                 
@@ -287,29 +239,5 @@ class NailProcessor: NSObject, NailProcessing {
         }
         
         return finalImage
-    }
-    
-    /// 세그멘테이션과 손 포즈 감지 결과를 기반으로 시각화를 진행합니다.
-    func visualizeResults(image: UIImage, observations: [VNHumanHandPoseObservation]?, completion: @escaping (UIImage?, Error?) -> Void) {
-        print("[NailProcessor] 결과 시각화 시작")
-        if let observations = observations, !observations.isEmpty {
-            handPoseDetector.visualizeHandPose(on: image, observations: observations) { resultImage, error in
-                if let error = error {
-                    print("[NailProcessor] 손 포즈 시각화 에러: \(error)")
-                    completion(nil, error)
-                    return
-                }
-                guard let finalImage = resultImage else {
-                    print("[NailProcessor] 최종 이미지 생성 실패")
-                    completion(nil, NSError(domain: "NailProcessor", code: -2, userInfo: [NSLocalizedDescriptionKey: "최종 이미지 생성 실패"]))
-                    return
-                }
-                print("[NailProcessor] 손 포즈 시각화 완료")
-                completion(finalImage, nil)
-            }
-        } else {
-            print("[NailProcessor] 손 포즈 관측 결과가 없습니다. 원본 이미지만 반환합니다.")
-            completion(image, nil)
-        }
     }
 }

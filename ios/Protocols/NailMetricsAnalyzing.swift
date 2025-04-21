@@ -19,12 +19,4 @@ protocol NailMetricsAnalyzing {
         contours: [(path: UIBezierPath, center: CGPoint)],
         displaySize: CGSize
     ) -> [NailMetrics]
-    
-    func visualizeNailMetrics(
-        in context: CGContext,
-        metrics: NailMetrics,
-        contour: UIBezierPath,
-        arrowLength: CGFloat,
-        arrowColor: UIColor
-    )
 }

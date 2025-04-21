@@ -16,12 +16,4 @@ import Vision
     ///   - image: 처리할 원본 이미지
     ///   - completion: 세그멘테이션 결과, 손 포즈 감지 결과, 에러를 전달하는 콜백
     func processImage(_ image: UIImage, completion: @escaping (UIImage?, [VNHumanHandPoseObservation]?, Error?) -> Void)
-    
-    /// 세그멘테이션과 손 포즈 감지 결과를 시각화합니다.
-    ///
-    /// - Parameters:
-    ///   - image: 원본 이미지 또는 세그멘테이션 결과 이미지
-    ///   - observations: 손 포즈 감지 결과
-    ///   - completion: 시각화된 이미지와 에러를 전달하는 콜백
-    func visualizeResults(image: UIImage, observations: [VNHumanHandPoseObservation]?, completion: @escaping (UIImage?, Error?) -> Void)
 } 
