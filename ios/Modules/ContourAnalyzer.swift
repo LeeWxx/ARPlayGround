@@ -176,17 +176,12 @@ class ContourAnalyzer: ContourAnalyzing {
             displaySize: displaySize
         )
         
-        print("\n===== 손톱 메트릭스 계산 결과 =====")
-        for metrics in fingerMetrics {
-            print(metrics.description)
-        }
-        print("===================================\n")
-        
         for metrics in fingerMetrics {
             // 컨투어 중심 또는 영역이 해당 손가락 메트릭스에 맞으면 시각화 수행
             for (contour, _) in contours {
                 if contour.bounds.contains(metrics.contourCenter) {
-                    NailMetricsAnalyzer.visualizeNailMetrics(
+                    let analyzer = NailMetricsAnalyzer()
+                    analyzer.visualizeNailMetrics(
                         in: context,
                         metrics: metrics,
                         contour: contour,
