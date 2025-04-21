@@ -4,15 +4,21 @@ import React
 @objc(CameraViewManager)
 class CameraViewManager: RCTViewManager {
     
-    private var cameraService: CameraCapturable {
+    // 네일 세트 데이터 관리
+    private var nailSetData: [String: Any] = [:]
+    private var nailAssetProvider: any NailAssetProviding {
+        return NailAssetProvider.shared
+    }
+    
+    private var cameraService: any CameraCapturable {
         return CameraService.shared
     }
     
-    private var imageSegmenter: ImageSegmenting {
+    private var imageSegmenter: any ImageSegmenting {
         return ImageSegmenter.shared
     }
     
-    private var nailProcessor: NailProcessing {
+    private var nailProcessor: any NailProcessing {
         return NailProcessor.shared
     }
     
@@ -24,7 +30,22 @@ class CameraViewManager: RCTViewManager {
         return true
     }
     
+    // 네일 세트 설정 메서드 (React Native에서 호출)
+    @objc func setNailSet(_ node: NSNumber, nailSetDict: NSDictionary) -> Void {
+        nailSetData = nailSetDict as? [String: Any] ?? [:]
+        print("[CameraViewManager] 네일 세트 데이터 저장: \(nailSetData)")
+        nailAssetProvider.setNailSet(nailSetData)
+    }
+    
     @objc func capturePhoto(_ node: NSNumber, resolver: @escaping RCTPromiseResolveBlock, rejecter: @escaping RCTPromiseRejectBlock) {
+        // 캡처 전에 네일 세트 정보 확인 및 재설정
+        if !nailSetData.isEmpty {
+            print("[CameraViewManager] 캡처 전 네일 세트 데이터 재설정")
+            nailAssetProvider.setNailSet(nailSetData)
+        } else {
+            print("[CameraViewManager] 네일 세트 데이터가 비어 있습니다.")
+        }
+        
         DispatchQueue.main.async {
             guard let view = self.bridge.uiManager.view(forReactTag: node) as? CameraView else {
                 rejecter("ERROR", "Invalid view reference", nil)
